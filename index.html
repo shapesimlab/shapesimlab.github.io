@@ -64,7 +64,44 @@
 </style>
 </head>
 <body>
-<h1>Trials of the <span>Shaper</span></h1>
+<svg id="logo" viewBox="0 0 460 96" width="min(460px,90vw)" role="img" aria-label="Shape">
+  <defs>
+    <filter id="neon" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="strand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2a2a30"/>
+      <stop offset=".5" stop-color="#4aa3e0"/>
+      <stop offset="1" stop-color="#2a2a30"/>
+    </linearGradient>
+  </defs>
+  <!-- alpha-helix ribbon winding behind the wordmark -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M14 66 C 40 22, 66 22, 92 66 S 144 110, 170 66 S 222 22, 248 66 S 300 110, 326 66 S 378 22, 404 66"
+          stroke="url(#strand)" stroke-width="7" opacity=".85" filter="url(#neon)"/>
+    <path d="M14 30 C 40 74, 66 74, 92 30 S 144 -14, 170 30 S 222 74, 248 30 S 300 -14, 326 30 S 378 74, 404 30"
+          stroke="#55555e" stroke-width="4" opacity=".55"/>
+    <!-- residue rungs -->
+    <g stroke="#9a9aa4" stroke-width="2" opacity=".5">
+      <path d="M53 44 v10"/><path d="M131 44 v10"/><path d="M209 44 v10"/>
+      <path d="M287 44 v10"/><path d="M365 44 v10"/>
+    </g>
+  </g>
+  <!-- glitch ghost -->
+  <text x="232" y="60" text-anchor="middle" font-family="'Courier New',monospace"
+        font-size="46" letter-spacing="14" fill="#55555e" opacity=".6"
+        transform="translate(3,2)">SHAPE</text>
+  <!-- wordmark -->
+  <text x="230" y="58" text-anchor="middle" font-family="'Courier New',monospace"
+        font-size="46" letter-spacing="14" fill="#dcdce2" filter="url(#neon)"
+        stroke="#4aa3e0" stroke-width="1">SHAPE</text>
+  <!-- beta-sheet arrow underline -->
+  <path d="M92 80 H340 L326 72 M340 80 L326 88" stroke="#4aa3e0" stroke-width="3"
+        fill="none" filter="url(#neon)"/>
+  <text x="356" y="86" font-family="'Courier New',monospace" font-size="11"
+        letter-spacing="3" fill="#55555e">β-FOLD v4</text>
+</svg>
 <div id="wrap">
   <canvas id="c" width="320" height="180"></canvas>
   <button id="backBtn">Menu</button>

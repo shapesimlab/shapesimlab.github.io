@@ -43,7 +43,7 @@
   }
   button:hover,button:focus-visible{border-color:var(--glow);color:var(--glow);outline:none}
   button:disabled{opacity:.4;cursor:default}
-  .menu-btn{width:320px;display:flex;flex-direction:column;gap:4px;padding:12px}
+  .menu-btn{width:min(320px,100%);display:flex;flex-direction:column;gap:4px;padding:12px}
   .menu-btn small{color:var(--ash);letter-spacing:.1em;text-transform:none;font-size:11px}
   .menu-btn:hover small{color:var(--fog)}
   #corrUI,#matUI{display:none;flex-direction:column;align-items:center;gap:10px;width:min(960px,100%)}
@@ -61,6 +61,15 @@
   #touch button{padding:14px 22px;font-size:16px}
   @media (pointer:coarse){#touch{display:flex}}
   #backBtn{position:absolute;top:8px;right:8px;padding:4px 12px;font-size:11px;display:none;z-index:2}
+  /* menu needs more room than the 16:9 canvas gives on phones */
+  #wrap.menuOpen{min-height:min(480px,88vh)}
+  #wrap.menuOpen canvas{position:absolute;inset:0;width:100%;height:100%}
+  @media (max-width:600px){
+    .overlay{gap:8px;padding:14px}
+    .overlay h2{font-size:15px;letter-spacing:.2em}
+    .menu-btn{padding:9px}
+    button{padding:8px 18px;font-size:12px;letter-spacing:.15em}
+  }
   #sndBtn{position:absolute;top:8px;left:8px;padding:4px 12px;font-size:13px;z-index:2}
   #sndBtn.off{color:var(--ash);border-color:var(--stone)}
 </style>
@@ -251,6 +260,7 @@ $('sndBtn').addEventListener('click',()=>{
 
 function showMenu(){
   mode='menu';menu.style.display='flex';msg.style.display='none';
+  document.getElementById('wrap').classList.add('menuOpen');
   backBtn.style.display='none';hideUIs();musicStop();
   setHP(3);setScore('Score',0);
   setRes(W,H);cx.fillStyle=INK;cx.fillRect(0,0,W,H);
@@ -258,6 +268,7 @@ function showMenu(){
 backBtn.addEventListener('click',showMenu);
 document.querySelectorAll('.menu-btn').forEach(b=>b.addEventListener('click',()=>{
   menu.style.display='none';backBtn.style.display='block';
+  document.getElementById('wrap').classList.remove('menuOpen');
   musicStart();
   ({quest:startQuest,corr:startCorr,space:startSpace,mat:startMat})[b.dataset.game]();
 }));
@@ -673,6 +684,8 @@ function tickMat(){
   cx.fillText('σ bends values, never shapes. if inner edges differ, the shapes refuse.',16,CH-20);
   if(ma.reveal){cx.fillStyle=BONE;cx.fillText(ma.verdict,16,44);}
 }
+
+document.getElementById('wrap').classList.add('menuOpen');
 
 /* ================= MAIN LOOP ================= */
 function tick(){

@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trials of the Shaper</title>
+<style>
+  :root{
+    --ink:#0a0a0c; --stone:#2a2a30; --ash:#55555e;
+    --fog:#9a9aa4; --bone:#dcdce2; --glow:#4aa3e0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--ink); color:var(--bone);
+    font-family:'Courier New',monospace;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:12px;padding:12px;
+  }
+  h1{font-size:clamp(18px,4vw,30px);letter-spacing:.35em;text-transform:uppercase;color:var(--fog);font-weight:400}
+  h1 span{color:var(--glow)}
+  #wrap{position:relative;width:min(960px,100%)}
+  canvas{
+    width:100%;display:block;
+    image-rendering:pixelated;image-rendering:crisp-edges;
+    background:var(--ink);border:2px solid var(--stone);
+    box-shadow:0 0 0 2px var(--ink),0 0 40px rgba(0,0,0,.9);
+  }
+  #hud{display:flex;gap:24px;font-size:13px;letter-spacing:.15em;color:var(--fog);text-transform:uppercase;flex-wrap:wrap;justify-content:center}
+  #hud b{color:var(--bone)}
+  .overlay{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:12px;
+    background:rgba(10,10,12,.88);text-align:center;padding:20px;overflow:auto;
+  }
+  .overlay h2{font-size:clamp(16px,3vw,24px);letter-spacing:.3em;text-transform:uppercase;font-weight:400}
+  .overlay p{color:var(--fog);font-size:13px;line-height:1.7;max-width:460px}
+  .glow{color:var(--glow)}
+  button{
+    background:none;border:2px solid var(--ash);color:var(--bone);
+    font-family:inherit;font-size:13px;letter-spacing:.25em;text-transform:uppercase;
+    padding:10px 26px;cursor:pointer;
+  }
+  button:hover,button:focus-visible{border-color:var(--glow);color:var(--glow);outline:none}
+  button:disabled{opacity:.4;cursor:default}
+  .menu-btn{width:320px;display:flex;flex-direction:column;gap:4px;padding:12px}
+  .menu-btn small{color:var(--ash);letter-spacing:.1em;text-transform:none;font-size:11px}
+  .menu-btn:hover small{color:var(--fog)}
+  #corrUI,#matUI{display:none;flex-direction:column;align-items:center;gap:10px;width:min(960px,100%)}
+  #corrUI .row{display:flex;align-items:center;gap:14px;width:100%;max-width:520px}
+  input[type=range]{flex:1;accent-color:var(--glow)}
+  #guessVal{color:var(--glow);min-width:56px;text-align:right;font-size:15px}
+  #matUI .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center}
+  #matUI input{
+    width:60px;height:42px;background:var(--ink);border:2px solid var(--ash);
+    color:var(--bone);font-family:inherit;font-size:17px;text-align:center;
+  }
+  #matUI input:focus{border-color:var(--glow);outline:none}
+  #matUI .times{color:var(--fog);font-size:18px}
+  #touch{display:none;gap:10px;user-select:none}
+  #touch button{padding:14px 22px;font-size:16px}
+  @media (pointer:coarse){#touch{display:flex}}
+  #backBtn{position:absolute;top:8px;right:8px;padding:4px 12px;font-size:11px;display:none;z-index:2}
+</style>
+</head>
+<body>
+<h1>Trials of the <span>Shaper</span></h1>
+<div id="wrap">
+  <canvas id="c" width="320" height="180"></canvas>
+  <button id="backBtn">Menu</button>
+  <div class="overlay" id="menu">
+    <h2>Four trials.<br>Pass them, become a <span class="glow">Shaper</span>.</h2>
+    <button class="menu-btn" data-game="quest">Trial I — Save the Princess<small>graveyard platformer — ← → ↑</small></button>
+    <button class="menu-btn" data-game="corr">Trial II — Guess the Correlation<small>read the scatter of souls</small></button>
+    <button class="menu-btn" data-game="space">Trial III — Void Hunt<small>shoot the wraith-ships — ← → space</small></button>
+    <button class="menu-btn" data-game="mat">Trial IV — Shape Forge<small>no numbers — only the shape of the product</small></button>
+  </div>
+  <div class="overlay" id="msg" style="display:none"></div>
+</div>
+<div id="hud">
+  <div>Hearts <b id="hp">♥♥♥</b></div>
+  <div id="hudMid">Score <b>0</b></div>
+</div>
+<div id="corrUI">
+  <div class="row">
+    <span style="font-size:12px;color:var(--fog)">−1</span>
+    <input type="range" id="guess" min="-100" max="100" value="0">
+    <span style="font-size:12px;color:var(--fog)">+1</span>
+    <b id="guessVal">0.00</b>
+  </div>
+  <button id="lockBtn">Lock guess</button>
+</div>
+<div id="matUI">
+  <div class="row">
+    <input type="number" id="ansRows" min="1" max="9" placeholder="r">
+    <span class="times">×</span>
+    <input type="number" id="ansCols" min="1" max="9" placeholder="c">
+    <button id="forgeBtn">Forge</button>
+    <button id="impBtn">Shapes refuse</button>
+  </div>
+</div>
+<div id="touch">
+  <button data-k="l">◀</button>
+  <button data-k="j">▲</button>
+  <button data-k="r">▶</button>
+</div>
+
+<script>
+"use strict";
+const cv=document.getElementById('c'),cx=cv.getContext('2d');
+cx.imageSmoothingEnabled=false;
+const INK='#0a0a0c',STONE='#2a2a30',ASH='#55555e',FOG='#9a9aa4',BONE='#dcdce2',
+      SKIN='#c2c2ca',DARK='#141418',GLOW='#4aa3e0',GLOW2='#8cc9ef';
+const W=320,H=180;
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let mode='menu',t=0,keys={};
+const $=id=>document.getElementById(id);
+const menu=$('menu'),msg=$('msg'),backBtn=$('backBtn'),
+      corrUI=$('corrUI'),matUI=$('matUI'),hudMid=$('hudMid');
+
+function px(x,y,w,h,col){cx.fillStyle=col;cx.fillRect(Math.round(x),Math.round(y),w,h);}
+function setRes(w,h){if(cv.width!==w){cv.width=w;cv.height=h;cx.imageSmoothingEnabled=false;}}
+function setHP(n,max=3){$('hp').textContent='♥'.repeat(Math.max(0,n))+'·'.repeat(Math.max(0,max-n));}
+function setScore(label,val){hudMid.innerHTML=label+' <b>'+val+'</b>';}
+function hideUIs(){corrUI.style.display='none';matUI.style.display='none';}
+
+addEventListener('keydown',e=>{
+  if(mode!=='mat'&&['ArrowLeft','ArrowRight','ArrowUp',' '].includes(e.key))e.preventDefault();
+  keys[e.key]=true;
+});
+addEventListener('keyup',e=>keys[e.key]=false);
+document.querySelectorAll('#touch button').forEach(b=>{
+  const map={l:'ArrowLeft',r:'ArrowRight',j:'ArrowUp'};const k=map[b.dataset.k];
+  const on=e=>{e.preventDefault();keys[k]=true},off=e=>{e.preventDefault();keys[k]=false};
+  b.addEventListener('touchstart',on);b.addEventListener('touchend',off);
+  b.addEventListener('mousedown',on);b.addEventListener('mouseup',off);
+});
+function firePressed(){return keys[' ']||(mode==='space'&&keys['ArrowUp']);}
+
+function showMenu(){
+  mode='menu';menu.style.display='flex';msg.style.display='none';
+  backBtn.style.display='none';hideUIs();
+  setHP(3);setScore('Score',0);
+  setRes(W,H);cx.fillStyle=INK;cx.fillRect(0,0,W,H);
+}
+backBtn.addEventListener('click',showMenu);
+document.querySelectorAll('.menu-btn').forEach(b=>b.addEventListener('click',()=>{
+  menu.style.display='none';backBtn.style.display='block';
+  ({quest:startQuest,corr:startCorr,space:startSpace,mat:startMat})[b.dataset.game]();
+}));
+function endScreen(title,body,btn,restart){
+  mode='paused';
+  msg.innerHTML=`<h2>${title}</h2><p>${body}</p>
+    <div style="display:flex;gap:10px"><button id="again">${btn}</button><button id="toMenu">Menu</button></div>`;
+  msg.style.display='flex';
+  $('again').onclick=()=>{msg.style.display='none';restart();};
+  $('toMenu').onclick=showMenu;
+}
+
+/* ================= TRIAL I: QUEST ================= */
+const GROUND=150,LEVEL_LEN=2400;
+let q={};
+function startQuest(){
+  hideUIs();setRes(W,H);
+  q={hero:{x:20,y:GROUND,vx:0,vy:0,onG:true,hp:3,inv:0,face:1},foes:[],cam:0};
+  for(let i=0;i<9;i++)q.foes.push({type:'bat',x:350+i*230,y:90+(i%3)*15,ph:i*1.3});
+  for(let i=0;i<5;i++)q.foes.push({type:'ghost',x:500+i*400,y:GROUND-14,ph:i*2});
+  setScore('Distance','0m');setHP(3);mode='quest';
+}
+function drawHero(sx,sy,face,walk){
+  const step=walk?Math.floor(t/6)%2:0;
+  px(sx+3,sy-6,3,6,DARK);px(sx+8,sy-6+(step?-1:0),3,6,DARK);
+  px(sx+2,sy-14,10,8,STONE);
+  px(sx,sy-13,2,7,SKIN);px(sx+12,sy-13,2,7,SKIN);
+  px(sx,sy-11,2,1,DARK);px(sx,sy-9,2,1,DARK);
+  px(sx+12,sy-12,2,1,DARK);px(sx+12,sy-10,2,1,DARK);
+  px(sx+3,sy-21,8,7,SKIN);
+  px(sx+3,sy-22,8,2,DARK);px(sx+2,sy-21,1,3,DARK);
+  px(sx+4,sy-18,3,2,BONE);px(sx+8,sy-18,3,2,BONE);px(sx+7,sy-18,1,1,BONE);
+  px(sx+5,sy-17,1,1,DARK);px(sx+9,sy-17,1,1,DARK);
+  px(sx+2,sy-17,1,2,GLOW);px(sx+11,sy-17,1,2,GLOW);
+}
+function drawPrincess(sx,sy){
+  px(sx+2,sy-12,10,12,FOG);px(sx+3,sy-13,8,2,BONE);
+  px(sx+4,sy-19,6,6,SKIN);
+  px(sx+3,sy-21,8,3,GLOW);px(sx+2,sy-19,2,9,GLOW);px(sx+10,sy-19,2,9,GLOW);
+  px(sx+3,sy-20,8,1,GLOW2);
+  px(sx+5,sy-17,1,1,DARK);px(sx+8,sy-17,1,1,DARK);
+}
+function drawBat(sx,sy,flap){
+  px(sx+3,sy,3,3,DARK);px(sx+4,sy+1,1,1,GLOW);
+  if(flap){px(sx,sy-1,3,2,STONE);px(sx+6,sy-1,3,2,STONE);}
+  else{px(sx,sy+2,3,2,STONE);px(sx+6,sy+2,3,2,STONE);}
+}
+function drawGhost(sx,sy){
+  px(sx,sy-10,8,10,FOG);px(sx,sy-11,8,1,BONE);
+  px(sx+1,sy,2,2,FOG);px(sx+5,sy,2,2,FOG);
+  px(sx+2,sy-8,1,2,DARK);px(sx+5,sy-8,1,2,DARK);
+}
+function drawTomb(sx){
+  px(sx,GROUND-10,10,10,STONE);px(sx+1,GROUND-12,8,2,STONE);
+  px(sx+4,GROUND-8,2,5,ASH);px(sx+3,GROUND-7,4,1,ASH);
+}
+function drawTower(sx){
+  px(sx,GROUND-70,44,70,STONE);px(sx-4,GROUND-70,52,6,DARK);
+  for(let i=0;i<7;i++)px(sx-4+i*8,GROUND-76,5,6,DARK);
+  px(sx+16,GROUND-56,12,16,DARK);px(sx+18,GROUND-54,8,12,GLOW);
+  px(sx+16,GROUND-16,12,16,DARK);
+  cx.fillStyle=DARK;
+  for(let y=GROUND-64;y<GROUND;y+=8)cx.fillRect(sx,y,44,1);
+}
+function questScene(){
+  cx.fillStyle=INK;cx.fillRect(0,0,W,H);
+  px(250,24,16,16,BONE);px(254,27,8,3,FOG);px(258,33,4,2,FOG);
+  cx.fillStyle=DARK;
+  for(let i=0;i<W;i+=4){const h2=18+10*Math.sin((i+q.cam*0.2)*0.02);cx.fillRect(i,110-h2,4,h2+70);}
+  cx.fillStyle=STONE;
+  for(let i=0;i<6;i++){
+    const tx=((i*160-q.cam*0.5)%(W+80)+W+80)%(W+80)-40;
+    cx.fillRect(tx,GROUND-46,3,46);
+    cx.fillRect(tx-8,GROUND-40,8,2);cx.fillRect(tx+3,GROUND-34,9,2);cx.fillRect(tx-5,GROUND-26,5,2);
+  }
+  px(0,GROUND,W,H-GROUND,STONE);
+  cx.fillStyle=ASH;
+  for(let i=0;i<W;i+=7)cx.fillRect(i-(q.cam%7),GROUND,3,1);
+  for(let g=200;g<LEVEL_LEN-200;g+=170){const sx=g-q.cam;if(sx>-20&&sx<W)drawTomb(sx);}
+  if(!reduceMotion){
+    cx.fillStyle='rgba(154,154,164,0.08)';
+    for(let i=0;i<3;i++){const fx=((t*0.3+i*130)%(W+120))-60;cx.fillRect(fx,GROUND-8-i*4,90,4);}
+  }
+  const twx=LEVEL_LEN-60-q.cam;
+  if(twx<W+60){drawTower(twx);drawPrincess(twx+15,GROUND-40);}
+}
+function tickQuest(){
+  const h=q.hero;
+  const L=keys['ArrowLeft'],R=keys['ArrowRight'],J=keys['ArrowUp']||keys[' '];
+  h.vx=(R?1.4:0)-(L?1.4:0);
+  if(h.vx)h.face=Math.sign(h.vx);
+  if(J&&h.onG){h.vy=-3.4;h.onG=false;}
+  h.vy+=0.18;
+  h.x=Math.max(10,Math.min(LEVEL_LEN-30,h.x+h.vx));
+  h.y+=h.vy;
+  if(h.y>=GROUND){h.y=GROUND;h.vy=0;h.onG=true;}
+  q.cam=Math.max(0,Math.min(LEVEL_LEN-W,h.x-100));
+  if(h.inv>0)h.inv--;
+  for(const f of q.foes){
+    if(f.type==='bat'){f.sy=f.y+Math.sin(t*0.08+f.ph)*18;f.sx=f.x+Math.sin(t*0.03+f.ph)*30;}
+    else{f.sx=f.x+Math.sin(t*0.02+f.ph)*50;f.sy=f.y+Math.sin(t*0.05+f.ph)*4;}
+    if(h.inv===0){
+      const hx=h.x,hy=h.y-21;
+      if(f.sx<hx+14&&f.sx+9>hx&&f.sy<hy+21&&f.sy+10>hy){
+        h.hp--;h.inv=70;h.vy=-2;
+        if(h.hp<=0){endScreen('Fallen','The graveyard keeps its dead. The princess waits still.','Rise again',startQuest);return;}
+      }
+    }
+  }
+  if(h.x>LEVEL_LEN-90){
+    endScreen('Rescued','Blue hair in the moonlight — the only color this realm has ever known.','Play again',startQuest);return;
+  }
+  questScene();
+  for(const f of q.foes){
+    const sx=f.sx-q.cam;if(sx<-15||sx>W+15)continue;
+    if(f.type==='bat')drawBat(sx,f.sy,Math.floor(t/8)%2===0);else drawGhost(sx,f.sy);
+  }
+  if(h.inv%8<5)drawHero(h.x-q.cam,h.y,h.face,Math.abs(h.vx)>0&&h.onG);
+  setHP(h.hp);setScore('Distance',Math.floor(h.x/10)+'m / '+Math.floor(LEVEL_LEN/10)+'m');
+}
+
+/* ================= TRIAL II: GUESS THE CORRELATION ================= */
+let co={};
+function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function newRound(){
+  const target=Math.random()*2-1;
+  const n=45,pts=[];
+  for(let i=0;i<n;i++){
+    const x=gauss(),z=gauss();
+    pts.push([x,target*x+Math.sqrt(Math.max(0,1-target*target))*z]);
+  }
+  let mx=0,my=0;pts.forEach(p=>{mx+=p[0];my+=p[1]});mx/=n;my/=n;
+  let sxy=0,sxx=0,syy=0;
+  pts.forEach(p=>{const dx=p[0]-mx,dy=p[1]-my;sxy+=dx*dy;sxx+=dx*dx;syy+=dy*dy});
+  co.r=sxy/Math.sqrt(sxx*syy);
+  co.pts=pts;co.locked=false;co.reveal=false;
+  $('guess').value=0;$('guessVal').textContent='0.00';
+  $('lockBtn').disabled=false;
+}
+function startCorr(){
+  hideUIs();setRes(640,360);
+  co={hp:3,score:0,round:1};
+  newRound();
+  corrUI.style.display='flex';
+  setHP(3,5);setScore('Score',0);mode='corr';
+}
+$('guess').addEventListener('input',e=>$('guessVal').textContent=(e.target.value/100).toFixed(2));
+$('lockBtn').addEventListener('click',()=>{
+  if(mode!=='corr'||co.locked)return;
+  co.locked=true;$('lockBtn').disabled=true;
+  const g=$('guess').value/100,err=Math.abs(g-co.r);
+  let verdict,pts=0,dhp=0;
+  if(err<=0.05){pts=100;dhp=1;verdict='Soulsight! +100 +♥';}
+  else if(err<=0.10){pts=50;verdict='Sharp eye. +50';}
+  else if(err<=0.20){pts=10;verdict='Close. +10';}
+  else{dhp=-1;verdict='The fog won. −♥';}
+  co.score+=pts;co.hp=Math.min(5,co.hp+dhp);
+  setHP(co.hp,5);setScore('Score',co.score);
+  co.verdict=verdict;co.err=err;co.reveal=true;
+  if(co.hp<=0){
+    setTimeout(()=>endScreen('Blinded','The scatter of souls swallowed you. Final score: '+co.score,'Read again',startCorr),1500);
+  }else{
+    setTimeout(()=>{if(mode!=='corr')return;co.round++;newRound();},1900);
+  }
+});
+function tickCorr(){
+  const CW=640,CH=360;
+  cx.fillStyle=INK;cx.fillRect(0,0,CW,CH);
+  const PX=90,PY=24,PW=420,PH=290;
+  px(PX,PY,PW,2,ASH);px(PX,PY+PH,PW,2,ASH);px(PX,PY,2,PH,ASH);px(PX+PW,PY,2,PH,ASH);
+  const labels=[['moonlight','wailing'],['tomb depth','fog density'],['bell tolls','raven count'],
+                ['candle hours','ghosts seen'],['grave age','ivy growth'],['owl calls','dread']];
+  const lab=labels[(co.round-1)%labels.length];
+  cx.fillStyle=BONE;cx.font='14px monospace';cx.textAlign='center';
+  cx.fillText(lab[0],PX+PW/2,PY+PH+26);
+  cx.save();cx.translate(PX-24,PY+PH/2);cx.rotate(-Math.PI/2);
+  cx.fillText(lab[1],0,0);cx.restore();
+  cx.textAlign='left';
+  cx.fillStyle=FOG;cx.font='13px monospace';
+  cx.fillText('round '+co.round,PX+PW+14,PY+16);
+  for(const p of co.pts){
+    const sx=PX+PW/2+p[0]*(PW/6),sy=PY+PH/2-p[1]*(PH/6);
+    if(sx>PX+4&&sx<PX+PW-4&&sy>PY+4&&sy<PY+PH-4){
+      px(sx-3,sy-3,6,4,BONE);px(sx-3,sy+1,2,2,BONE);px(sx+1,sy+1,2,2,BONE);
+      px(sx-2,sy-2,1,1,DARK);px(sx+1,sy-2,1,1,DARK);
+    }
+  }
+  cx.font='13px monospace';
+  if(co.reveal){
+    cx.fillStyle=GLOW;
+    cx.fillText('true r',PX+PW+14,PY+52);
+    cx.font='18px monospace';
+    cx.fillText(co.r.toFixed(2),PX+PW+14,PY+74);
+    cx.font='13px monospace';cx.fillStyle=BONE;
+    cx.fillText('err '+co.err.toFixed(2),PX+PW+14,PY+100);
+    co.verdict.split(' ').forEach((w,i)=>cx.fillText(w,PX+PW+14,PY+128+i*17));
+  }else{
+    cx.fillStyle=ASH;
+    ['guess r','with the','slider,','then','lock'].forEach((w,i)=>cx.fillText(w,PX+PW+14,PY+52+i*17));
+  }
+}
+
+/* ================= TRIAL III: VOID HUNT ================= */
+let sp={};
+function startSpace(){
+  hideUIs();setRes(W,H);
+  sp={x:W/2,hp:3,inv:0,score:0,cool:0,bullets:[],foes:[],ebullets:[],wave:0,stars:[]};
+  for(let i=0;i<40;i++)sp.stars.push([Math.random()*W,Math.random()*H,Math.random()<0.2?2:1]);
+  spawnWave();
+  setHP(3);setScore('Score',0);mode='space';
+}
+function spawnWave(){
+  sp.wave++;
+  const n=4+Math.min(6,sp.wave);
+  for(let i=0;i<n;i++)
+    sp.foes.push({x:30+i*(W-60)/n,y:-20-Math.random()*40,ph:Math.random()*6,hp:1,
+                  vy:0.25+sp.wave*0.03});
+}
+function drawShip(sx,sy){
+  px(sx-1,sy-8,3,10,FOG);
+  px(sx-5,sy-2,4,4,STONE);px(sx+2,sy-2,4,4,STONE);
+  px(sx-1,sy-9,3,2,BONE);
+  px(sx-1,sy+2,3,2,GLOW);
+  if(!reduceMotion&&t%6<3)px(sx,sy+4,1,2,GLOW2);
+}
+function drawWraith(sx,sy){
+  px(sx-4,sy,9,4,STONE);
+  px(sx-2,sy-3,5,3,DARK);
+  px(sx-6,sy+1,2,2,ASH);px(sx+5,sy+1,2,2,ASH);
+  px(sx-1,sy+1,1,1,GLOW);px(sx+1,sy+1,1,1,GLOW);
+}
+function tickSpace(){
+  cx.fillStyle=INK;cx.fillRect(0,0,W,H);
+  for(const s of sp.stars){
+    s[1]+=s[2]*0.3;if(s[1]>H)s[1]=0;
+    px(s[0],s[1],1,1,s[2]===2?FOG:ASH);
+  }
+  sp.x+=((keys['ArrowRight']?2:0)-(keys['ArrowLeft']?2:0));
+  sp.x=Math.max(8,Math.min(W-8,sp.x));
+  if(sp.cool>0)sp.cool--;
+  if(firePressed()&&sp.cool===0){sp.bullets.push({x:sp.x,y:H-24});sp.cool=12;}
+  if(sp.inv>0)sp.inv--;
+  sp.bullets=sp.bullets.filter(b=>(b.y-=3.5)>-5);
+  for(const f of sp.foes){
+    f.y+=f.vy;f.x+=Math.sin(t*0.04+f.ph)*0.7;
+    if(Math.random()<0.004+sp.wave*0.0008)sp.ebullets.push({x:f.x,y:f.y+4});
+    if(f.y>H+10)f.y=-20;
+  }
+  sp.ebullets=sp.ebullets.filter(b=>(b.y+=1.8)<H+5);
+  for(const b of sp.bullets){
+    for(const f of sp.foes){
+      if(f.hp>0&&Math.abs(b.x-f.x)<6&&Math.abs(b.y-f.y)<5){
+        f.hp=0;b.y=-99;sp.score+=15;setScore('Score',sp.score);
+      }
+    }
+  }
+  sp.foes=sp.foes.filter(f=>f.hp>0);
+  if(sp.foes.length===0)spawnWave();
+  const py=H-16;
+  function hitPlayer(){
+    sp.hp--;sp.inv=80;setHP(sp.hp);
+    if(sp.hp<=0)endScreen('Drifting','The void claims another hunter. Final score: '+sp.score,'Hunt again',startSpace);
+  }
+  if(sp.inv===0){
+    for(const b of sp.ebullets)
+      if(Math.abs(b.x-sp.x)<5&&Math.abs(b.y-py)<7){b.y=H+99;hitPlayer();break;}
+    if(sp.inv===0&&mode==='space')for(const f of sp.foes)
+      if(Math.abs(f.x-sp.x)<8&&Math.abs(f.y-py)<8){f.hp=0;hitPlayer();break;}
+  }
+  if(mode!=='space')return;
+  for(const b of sp.bullets)px(b.x,b.y,1,4,GLOW);
+  for(const b of sp.ebullets)px(b.x,b.y,1,3,FOG);
+  for(const f of sp.foes)drawWraith(f.x,f.y);
+  if(sp.inv%8<5)drawShip(sp.x,py);
+  cx.fillStyle=ASH;cx.font='8px monospace';
+  cx.fillText('wave '+sp.wave,6,10);
+}
+
+/* ================= TRIAL IV: SHAPE FORGE =================
+   No numbers inside the matrices — only their shapes.
+   A chain of blank grids (a perceptron's weight matrices, with a
+   nonlinearity sigma between layers — sigma never changes a shape).
+   The player answers with the SHAPE of the product, or declares
+   the chain impossible when inner dimensions refuse to meet. */
+let ma={};
+function rdim(){return 1+Math.floor(Math.random()*5);} // 1..5
+function newMatRound(){
+  const r=ma.round;
+  let dims,compat;
+  if(r===1){dims=[[2,3],[3,2]];compat=true;}
+  else if(r===2){dims=[[3,1],[1,4]];compat=true;}
+  else if(r===3){dims=[[2,3],[2,3]];compat=false;}          // first refusal
+  else if(r===4){dims=[[4,2],[2,3],[3,1]];compat=true;}     // first chain + sigma
+  else{
+    const nm=Math.random()<0.5?2:3;
+    compat=Math.random()<0.65;
+    dims=[[rdim(),rdim()]];
+    for(let i=1;i<nm;i++){
+      let rows=compat?dims[i-1][1]:rdim();
+      if(!compat&&i===nm-1&&rows===dims[i-1][1])rows=(rows%5)+1; // force one mismatch
+      dims.push([rows,rdim()]);
+    }
+    // verify actual compatibility (random path may still align)
+    compat=dims.every((d,i)=>i===0||dims[i-1][1]===d[0]);
+  }
+  ma.dims=dims;ma.compat=compat;
+  ma.ansShape=compat?[dims[0][0],dims[dims.length-1][1]]:null;
+  ma.reveal=false;
+  $('ansRows').value='';$('ansCols').value='';
+  $('ansRows').disabled=false;$('ansCols').disabled=false;
+  $('forgeBtn').disabled=false;$('impBtn').disabled=false;
+  $('ansRows').focus();
+}
+function startMat(){
+  hideUIs();setRes(640,360);
+  ma={hp:3,score:0,round:1};
+  newMatRound();
+  matUI.style.display='flex';
+  setHP(3,5);setScore('Score',0);mode='mat';
+}
+function matResolve(saidImpossible){
+  if(mode!=='mat'||ma.reveal)return;
+  let correct;
+  if(saidImpossible)correct=!ma.compat;
+  else{
+    const r=parseInt($('ansRows').value,10),c=parseInt($('ansCols').value,10);
+    correct=ma.compat&&r===ma.ansShape[0]&&c===ma.ansShape[1];
+  }
+  ma.reveal=true;
+  ['ansRows','ansCols','forgeBtn','impBtn'].forEach(id=>$(id).disabled=true);
+  if(correct){
+    ma.score+=50;ma.hp=Math.min(5,ma.hp+1);
+    ma.verdict='Well shaped. +50 +♥';
+  }else{
+    ma.hp--;
+    ma.verdict=ma.compat
+      ?('It forges to '+ma.ansShape[0]+'×'+ma.ansShape[1]+'. −♥')
+      :'The shapes refuse each other. −♥';
+  }
+  setHP(ma.hp,5);setScore('Score',ma.score);
+  if(ma.hp<=0){
+    setTimeout(()=>endScreen('Unshaped','The forge rejected your hand. Final score: '+ma.score,'Forge again',startMat),1600);
+  }else{
+    setTimeout(()=>{if(mode!=='mat')return;ma.round++;newMatRound();},correct?1400:2600);
+  }
+}
+$('forgeBtn').addEventListener('click',()=>matResolve(false));
+$('impBtn').addEventListener('click',()=>matResolve(true));
+
+function drawBlankMatrix(x0,y0,rows,cols,cell,frame){
+  cx.strokeStyle=frame;cx.lineWidth=2;
+  cx.strokeRect(x0,y0,cols*cell,rows*cell);
+  cx.strokeStyle=STONE;cx.lineWidth=1;
+  for(let j=1;j<cols;j++){cx.beginPath();cx.moveTo(x0+j*cell,y0);cx.lineTo(x0+j*cell,y0+rows*cell);cx.stroke();}
+  for(let i=1;i<rows;i++){cx.beginPath();cx.moveTo(x0,y0+i*cell);cx.lineTo(x0+cols*cell,y0+i*cell);cx.stroke();}
+}
+function tickMat(){
+  const CW=640,CH=360,cell=26,midY=185;
+  cx.fillStyle=INK;cx.fillRect(0,0,CW,CH);
+  // layout the chain centered: [M] sigma [M] sigma [M] = [?]
+  const gapSig=44,gapEq=52;
+  let totalW=0;
+  ma.dims.forEach((d,i)=>{totalW+=d[1]*cell+(i?gapSig:0);});
+  const qCols=ma.compat?ma.ansShape[1]:3,qRows=ma.compat?ma.ansShape[0]:3;
+  totalW+=gapEq+qCols*cell;
+  let x=CW/2-totalW/2;
+  cx.font='15px monospace';cx.textAlign='center';cx.textBaseline='middle';
+  ma.dims.forEach((d,i)=>{
+    if(i){ // sigma between layers: the nonlinearity that never bends a shape
+      cx.fillStyle=GLOW2;
+      cx.fillText('σ',x-gapSig/2,midY);
+      cx.fillStyle=ASH;cx.font='10px monospace';
+      cx.fillText('·',x-gapSig/2,midY+16);
+      cx.font='15px monospace';
+    }
+    const h2=d[0]*cell,y0=midY-h2/2;
+    drawBlankMatrix(x,y0,d[0],d[1],cell,FOG);
+    // pulse one row of the left matrix and one column of the next — the handshake
+    if(!reduceMotion&&i<ma.dims.length-1&&Math.floor(t/30)%2===0){
+      cx.fillStyle='rgba(74,163,224,0.15)';
+      cx.fillRect(x,y0,d[1]*cell,cell);
+    }
+    x+=d[1]*cell+gapSig;
+  });
+  x-=gapSig;
+  // equals + answer shape
+  cx.fillStyle=BONE;cx.font='18px monospace';
+  cx.fillText('=',x+gapEq/2,midY);
+  const qx=x+gapEq,qy=midY-(qRows*cell)/2;
+  if(ma.reveal&&ma.compat){
+    drawBlankMatrix(qx,qy,ma.ansShape[0],ma.ansShape[1],cell,GLOW);
+    cx.fillStyle=GLOW2;cx.font='15px monospace';
+    cx.fillText(ma.ansShape[0]+'×'+ma.ansShape[1],qx+ma.ansShape[1]*cell/2,qy-16);
+  }else if(ma.reveal&&!ma.compat){
+    cx.fillStyle=GLOW;cx.font='26px monospace';
+    cx.fillText('∅',qx+qCols*cell/2,midY);
+  }else{
+    cx.setLineDash([5,4]);
+    cx.strokeStyle=GLOW;cx.lineWidth=2;
+    cx.strokeRect(qx,qy,qCols*cell,qRows*cell);
+    cx.setLineDash([]);
+    cx.fillStyle=GLOW;cx.font='24px monospace';
+    cx.fillText('?',qx+qCols*cell/2,midY);
+  }
+  cx.textAlign='left';cx.textBaseline='alphabetic';
+  // header + hints (shapes only, no numbers on the grids)
+  cx.fillStyle=ASH;cx.font='13px monospace';
+  cx.fillText('round '+ma.round,16,24);
+  cx.fillStyle=FOG;
+  cx.fillText('count the cells. what shape does this chain forge?',16,CH-40);
+  cx.fillStyle=ASH;
+  cx.fillText('σ bends values, never shapes. if inner edges differ, the shapes refuse.',16,CH-20);
+  if(ma.reveal){cx.fillStyle=BONE;cx.fillText(ma.verdict,16,44);}
+}
+
+/* ================= MAIN LOOP ================= */
+function tick(){
+  requestAnimationFrame(tick);
+  t++;
+  if(mode==='quest')tickQuest();
+  else if(mode==='corr')tickCorr();
+  else if(mode==='space')tickSpace();
+  else if(mode==='mat')tickMat();
+}
+tick();
+</script>
+</body>
+</html>

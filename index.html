@@ -377,7 +377,7 @@ function tickQuest(){
     if(h.inv===0){
       const hx=h.x,hy=h.y-21;
       if(f.sx<hx+14&&f.sx+9>hx&&f.sy<hy+21&&f.sy+10>hy){
-        h.hp--;h.inv=70;h.vy=-2;
+        h.hp--;h.inv=150;h.vy=-2;
         if(h.hp<=0){endScreen('Fallen','The graveyard keeps its dead. The princess waits still.','Rise again',startQuest);return;}
       }
     }

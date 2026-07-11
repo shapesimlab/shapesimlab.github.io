@@ -431,6 +431,8 @@ $('lockBtn').addEventListener('click',()=>{
   co.verdict=verdict;co.err=err;co.reveal=true;
   if(co.hp<=0){
     setTimeout(()=>endScreen('Blinded','The scatter of souls swallowed you. Final score: '+co.score,'Read again',startCorr),1500);
+  }else if(co.score>=300){
+    setTimeout(()=>endScreen('Trial II passed','You read the souls truly. Score '+co.score+' — the Shaper nods.','Read again',startCorr),1500);
   }else{
     setTimeout(()=>{if(mode!=='corr')return;co.round++;newRound();},1900);
   }
@@ -483,10 +485,23 @@ function startSpace(){
 }
 function spawnWave(){
   sp.wave++;
+  if(sp.wave>=10){
+    sp.boss={x:W/2,y:26,hp:25,maxhp:25,ph:0,flash:0};
+    return;
+  }
   const n=4+Math.min(6,sp.wave);
   for(let i=0;i<n;i++)
     sp.foes.push({x:30+i*(W-60)/n,y:-20-Math.random()*40,ph:Math.random()*6,hp:1,
                   vy:0.25+sp.wave*0.03});
+}
+function drawBoss(b){
+  const sx=b.x,sy=b.y,f=b.flash>0;
+  const body=f?BONE:STONE,hood=f?FOG:DARK;
+  px(sx-14,sy,28,10,body);
+  px(sx-8,sy-8,16,8,hood);
+  px(sx-19,sy+2,5,5,ASH);px(sx+14,sy+2,5,5,ASH);
+  px(sx-4,sy+3,2,2,GLOW);px(sx+2,sy+3,2,2,GLOW);
+  px(sx-10,sy+10,4,3,hood);px(sx+6,sy+10,4,3,hood);
 }
 function drawShip(sx,sy){
   px(sx-1,sy-8,3,10,FOG);
@@ -527,7 +542,27 @@ function tickSpace(){
     }
   }
   sp.foes=sp.foes.filter(f=>f.hp>0);
-  if(sp.foes.length===0)spawnWave();
+  if(sp.foes.length===0&&!sp.boss)spawnWave();
+  // boss behaviour
+  if(sp.boss){
+    const b=sp.boss;
+    b.ph+=0.02;b.x=W/2+Math.sin(b.ph)*100;
+    if(b.flash>0)b.flash--;
+    if(Math.random()<0.03){
+      sp.ebullets.push({x:b.x-10,y:b.y+12});
+      sp.ebullets.push({x:b.x+10,y:b.y+12});
+    }
+    for(const bl of sp.bullets){
+      if(Math.abs(bl.x-b.x)<16&&Math.abs(bl.y-b.y)<10){
+        bl.y=-99;b.hp--;b.flash=4;sp.score+=5;setScore('Score',sp.score);
+        if(b.hp<=0){
+          sp.boss=null;sp.score+=200;setScore('Score',sp.score);
+          endScreen('Trial III passed','The wraith-lord dissolves into static. The void is quiet. Score: '+sp.score,'Hunt again',startSpace);
+          return;
+        }
+      }
+    }
+  }
   const py=H-16;
   function hitPlayer(){
     sp.hp--;sp.inv=80;setHP(sp.hp);
@@ -543,9 +578,15 @@ function tickSpace(){
   for(const b of sp.bullets)px(b.x,b.y,1,4,GLOW);
   for(const b of sp.ebullets)px(b.x,b.y,1,3,FOG);
   for(const f of sp.foes)drawWraith(f.x,f.y);
+  if(sp.boss){
+    drawBoss(sp.boss);
+    // boss health bar
+    px(W/2-40,4,80,4,STONE);
+    px(W/2-40,4,80*sp.boss.hp/sp.boss.maxhp,4,GLOW);
+  }
   if(sp.inv%8<5)drawShip(sp.x,py);
   cx.fillStyle=ASH;cx.font='8px monospace';
-  cx.fillText('wave '+sp.wave,6,10);
+  cx.fillText(sp.boss?'wraith-lord':'wave '+sp.wave+'/9',6,10);
 }
 
 /* ================= TRIAL IV: SHAPE FORGE =================
@@ -612,6 +653,8 @@ function matResolve(saidImpossible){
   setHP(ma.hp,5);setScore('Score',ma.score);
   if(ma.hp<=0){
     setTimeout(()=>endScreen('Unshaped','The forge rejected your hand. Final score: '+ma.score,'Forge again',startMat),1600);
+  }else if(ma.score>=400){
+    setTimeout(()=>endScreen('Trial IV passed','Eight true forges. You see shapes the way the Shaper does.','Forge again',startMat),1600);
   }else{
     setTimeout(()=>{if(mode!=='mat')return;ma.round++;newMatRound();},correct?1400:2600);
   }

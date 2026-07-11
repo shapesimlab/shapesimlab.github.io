@@ -61,6 +61,8 @@
   #touch button{padding:14px 22px;font-size:16px}
   @media (pointer:coarse){#touch{display:flex}}
   #backBtn{position:absolute;top:8px;right:8px;padding:4px 12px;font-size:11px;display:none;z-index:2}
+  #sndBtn{position:absolute;top:8px;left:8px;padding:4px 12px;font-size:13px;z-index:2}
+  #sndBtn.off{color:var(--ash);border-color:var(--stone)}
 </style>
 </head>
 <body>
@@ -105,6 +107,7 @@
 <div id="wrap">
   <canvas id="c" width="320" height="180"></canvas>
   <button id="backBtn">Menu</button>
+  <button id="sndBtn" title="ringtone">♪</button>
   <div class="overlay" id="menu">
     <h2>Four trials.<br>Pass them, become a <span class="glow">Shaper</span>.</h2>
     <button class="menu-btn" data-game="quest">Trial I — Save the Princess<small>graveyard platformer — ← → ↑</small></button>
@@ -175,15 +178,87 @@ document.querySelectorAll('#touch button').forEach(b=>{
 });
 function firePressed(){return keys[' ']||(mode==='space'&&keys['ArrowUp']);}
 
+/* ===== RINGTONE MUSIC (monophonic square-wave, old-cellphone style) ===== */
+const snd={on:true,ctx:null,timer:null,nextT:0,idx:0};
+/* RTTTL support: paste any ringtone string into RTTTL_SONG below.
+   Format: name:d=<default dur>,o=<default octave>,b=<bpm>:notes  */
+const RTTTL_SONG=
+  "ShaperAnthem:d=8,o=5,b=140:e,e,e,4g,4e,d,d,d,4f#,4d,e,e,e,4g,4b,4a,4g,2e,4p,4b,4c6,4d6,2b,4a,4b,4c6,2a,4g,4a,4b,4g,4f#,4d,2e,e,e,4e,4p";
+function parseRTTTL(s){
+  const NOTE={c:0,'c#':1,d:2,'d#':3,e:4,f:5,'f#':6,g:7,'g#':8,a:9,'a#':10,b:11,h:11};
+  const parts=s.split(':');
+  const def={d:4,o:6,b:63};
+  parts[1].split(',').forEach(kv=>{const[k,v]=kv.trim().split('=');def[k]=+v;});
+  const beat=60/def.b; // quarter note seconds
+  const out=[];
+  parts[2].split(',').forEach(tok=>{
+    tok=tok.trim().toLowerCase();
+    const m=tok.match(/^(\d*)([a-hp]#?)(\.?)(\d?)(\.?)$/);
+    if(!m)return;
+    const dur=+(m[1]||def.d), dot=(m[3]==='.'||m[5]==='.'),
+          oct=+(m[4]||def.o);
+    let secs=beat*4/dur; if(dot)secs*=1.5;
+    if(m[2]==='p'){out.push([0,secs]);return;}
+    const midi=12*(oct+1)+NOTE[m[2]];
+    out.push([midi,secs]);
+  });
+  return out;
+}
+const TUNE=parseRTTTL(RTTTL_SONG);
+function midiHz(m){return 440*Math.pow(2,(m-69)/12);}
+function scheduleNotes(){
+  const c=snd.ctx;
+  while(snd.nextT<c.currentTime+0.8){
+    const [n,secs]=TUNE[snd.idx];
+    if(n){
+      const o=c.createOscillator(),g=c.createGain();
+      o.type='sawtooth';o.frequency.value=midiHz(n);
+      g.gain.setValueAtTime(0.0001,snd.nextT);
+      g.gain.exponentialRampToValueAtTime(0.055,snd.nextT+0.015);
+      g.gain.exponentialRampToValueAtTime(0.001,snd.nextT+secs*1.3);
+      o.connect(g).connect(c.destination);
+      o.start(snd.nextT);o.stop(snd.nextT+secs*1.4);
+      // sub-octave drone for weight
+      const o2=c.createOscillator(),g2=c.createGain();
+      o2.type='triangle';o2.frequency.value=midiHz(n-12);
+      g2.gain.setValueAtTime(0.0001,snd.nextT);
+      g2.gain.exponentialRampToValueAtTime(0.05,snd.nextT+0.02);
+      g2.gain.exponentialRampToValueAtTime(0.001,snd.nextT+secs*1.3);
+      o2.connect(g2).connect(c.destination);
+      o2.start(snd.nextT);o2.stop(snd.nextT+secs*1.4);
+    }
+    snd.nextT+=secs;
+    snd.idx=(snd.idx+1)%TUNE.length;
+  }
+}
+function musicStart(){
+  if(!snd.on||snd.timer)return;
+  if(!snd.ctx)snd.ctx=new (window.AudioContext||window.webkitAudioContext)();
+  snd.ctx.resume();
+  snd.nextT=snd.ctx.currentTime+0.05;snd.idx=0;
+  snd.timer=setInterval(scheduleNotes,200);
+}
+function musicStop(){
+  if(snd.timer){clearInterval(snd.timer);snd.timer=null;}
+  if(snd.ctx)snd.ctx.suspend();
+}
+$('sndBtn').addEventListener('click',()=>{
+  snd.on=!snd.on;
+  $('sndBtn').classList.toggle('off',!snd.on);
+  $('sndBtn').textContent=snd.on?'♪':'♪̶';
+  if(snd.on&&mode!=='menu')musicStart();else musicStop();
+});
+
 function showMenu(){
   mode='menu';menu.style.display='flex';msg.style.display='none';
-  backBtn.style.display='none';hideUIs();
+  backBtn.style.display='none';hideUIs();musicStop();
   setHP(3);setScore('Score',0);
   setRes(W,H);cx.fillStyle=INK;cx.fillRect(0,0,W,H);
 }
 backBtn.addEventListener('click',showMenu);
 document.querySelectorAll('.menu-btn').forEach(b=>b.addEventListener('click',()=>{
   menu.style.display='none';backBtn.style.display='block';
+  musicStart();
   ({quest:startQuest,corr:startCorr,space:startSpace,mat:startMat})[b.dataset.game]();
 }));
 function endScreen(title,body,btn,restart){

@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Trials of the Shaper — four retro pixel mini-games in one file: a graveyard platformer, correlation guessing, a void shooter, and matrix-shape puzzles.">
+<meta name="theme-color" content="#0a0a0c">
+<meta property="og:title" content="Trials of the Shaper">
+<meta property="og:description" content="Four trials. Pass them, become a Shaper.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0c'/><path d='M2 11 C4 5 6 5 8 11 S12 17 14 11' fill='none' stroke='%234aa3e0' stroke-width='2'/></svg>">
 <title>Trials of the Shaper</title>
 <style>
   :root{
@@ -46,6 +53,14 @@
   .menu-btn{width:min(320px,100%);display:flex;flex-direction:column;gap:4px;padding:12px}
   .menu-btn small{color:var(--ash);letter-spacing:.1em;text-transform:none;font-size:11px}
   .menu-btn:hover small{color:var(--fog)}
+  .details-link{
+    margin-top:14px;padding:4px;
+    color:#f2b3c9;
+    font-size:15px;letter-spacing:.18em;text-decoration:none;text-align:center;max-width:100%;
+    display:flex;align-items:center;justify-content:center;gap:12px;
+  }
+  .details-link svg{flex:none}
+  .details-link:hover,.details-link:focus-visible{color:#ffd4e3;outline:none}
   #corrUI,#matUI{display:none;flex-direction:column;align-items:center;gap:10px;width:min(960px,100%)}
   #corrUI .row{display:flex;align-items:center;gap:14px;width:100%;max-width:520px}
   input[type=range]{flex:1;accent-color:var(--glow)}
@@ -56,6 +71,7 @@
     color:var(--bone);font-family:inherit;font-size:17px;text-align:center;
   }
   #matUI input:focus{border-color:var(--glow);outline:none}
+  #matUI input.bad{border-color:#c96a52}
   #matUI .times{color:var(--fog);font-size:18px}
   #touch{display:none;gap:10px;user-select:none}
   #touch button{padding:14px 22px;font-size:16px}
@@ -69,6 +85,7 @@
     .overlay h2{font-size:15px;letter-spacing:.2em}
     .menu-btn{padding:9px}
     button{padding:8px 18px;font-size:12px;letter-spacing:.15em}
+    .details-link svg{display:none}
   }
   #sndBtn{position:absolute;top:8px;left:8px;padding:4px 12px;font-size:13px;z-index:2}
   #sndBtn.off{color:var(--ash);border-color:var(--stone)}
@@ -123,10 +140,7 @@
     <button class="menu-btn" data-game="corr">Trial II — Guess the Correlation<small>read the scatter of souls</small></button>
     <button class="menu-btn" data-game="space">Trial III — Void Hunt<small>shoot the wraith-ships — ← → space</small></button>
     <button class="menu-btn" data-game="mat">Trial IV — Shape Forge<small>no numbers — only the shape of the product</small></button>
-    <a href="https://tfguclu.github.io" target="_blank" rel="noopener"
-       style="color:var(--ash);font-size:11px;letter-spacing:.15em;text-decoration:none;margin-top:6px"
-       onmouseover="this.style.color='var(--glow)'" onmouseout="this.style.color='var(--ash)'">
-       for further details — tfguclu.github.io</a>
+    <a class="details-link" href="https://tfguclu.github.io" target="_blank" rel="noopener"><svg viewBox="0 0 46 18" width="46" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M2 9 C9 0 15 0 22 9 S35 18 42 9" stroke-width="2" opacity=".9"/><path d="M2 9 C9 18 15 18 22 9 S35 0 42 9" stroke-width="1.5" opacity=".35"/><path d="M22 5v8" stroke-width="1" opacity=".5"/></svg>for further details — tfguclu.github.io<svg viewBox="0 0 46 18" width="46" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M2 9 C9 0 15 0 22 9 S35 18 42 9" stroke-width="2" opacity=".9"/><path d="M2 9 C9 18 15 18 22 9 S35 0 42 9" stroke-width="1.5" opacity=".35"/><path d="M22 5v8" stroke-width="1" opacity=".5"/></svg></a>
   </div>
   <div class="overlay" id="msg" style="display:none"></div>
 </div>
@@ -166,6 +180,7 @@ const INK='#0a0a0c',STONE='#2a2a30',ASH='#55555e',FOG='#9a9aa4',BONE='#dcdce2',
       SKIN='#c2c2ca',DARK='#141418',GLOW='#4aa3e0',GLOW2='#8cc9ef';
 const W=320,H=180;
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const smallMQ=matchMedia('(max-width:600px)'); // scale canvas text up on phones
 
 let mode='menu',t=0,keys={};
 const $=id=>document.getElementById(id);
@@ -183,6 +198,7 @@ addEventListener('keydown',e=>{
   keys[e.key]=true;
 });
 addEventListener('keyup',e=>keys[e.key]=false);
+addEventListener('blur',()=>keys={}); // don't leave keys stuck when focus leaves
 document.querySelectorAll('#touch button').forEach(b=>{
   const map={l:'ArrowLeft',r:'ArrowRight',j:'ArrowUp'};const k=map[b.dataset.k];
   const on=e=>{e.preventDefault();keys[k]=true},off=e=>{e.preventDefault();keys[k]=false};
@@ -221,7 +237,9 @@ const TUNE=parseRTTTL(RTTTL_SONG);
 function midiHz(m){return 440*Math.pow(2,(m-69)/12);}
 function scheduleNotes(){
   const c=snd.ctx;
-  while(snd.nextT<c.currentTime+0.8){
+  // if the tab was throttled and we fell behind, skip ahead instead of burst-playing
+  if(snd.nextT<c.currentTime)snd.nextT=c.currentTime+0.05;
+  while(snd.nextT<c.currentTime+2.2){
     const [n,secs]=TUNE[snd.idx];
     if(n){
       const o=c.createOscillator(),g=c.createGain();
@@ -444,28 +462,32 @@ $('lockBtn').addEventListener('click',()=>{
   setHP(co.hp,5);setScore('Score',co.score);
   co.verdict=verdict;co.err=err;co.reveal=true;
   if(co.hp<=0){
-    setTimeout(()=>endScreen('Blinded','The scatter of souls swallowed you. Final score: '+co.score,'Read again',startCorr),1500);
+    setTimeout(()=>{if(mode!=='corr')return;endScreen('Blinded','The scatter of souls swallowed you. Final score: '+co.score,'Read again',startCorr);},1500);
   }else if(co.score>=300){
-    setTimeout(()=>endScreen('Trial II passed','You read the souls truly. Score '+co.score+' — the Shaper nods.','Read again',startCorr),1500);
+    setTimeout(()=>{if(mode!=='corr')return;endScreen('Trial II passed','You read the souls truly. Score '+co.score+' — the Shaper nods.','Read again',startCorr);},1500);
   }else{
     setTimeout(()=>{if(mode!=='corr')return;co.round++;newRound();},1900);
   }
 });
 function tickCorr(){
   const CW=640,CH=360;
+  const SM=smallMQ.matches,FS=SM?1.5:1,LH=Math.round(17*FS),
+        f13=Math.round(13*FS)+'px monospace',
+        f14=Math.round(14*FS)+'px monospace',
+        f18=Math.round(18*FS)+'px monospace';
   cx.fillStyle=INK;cx.fillRect(0,0,CW,CH);
-  const PX=90,PY=24,PW=420,PH=290;
+  const PX=SM?64:90,PY=24,PW=SM?366:420,PH=290,panelX=PX+PW+14;
   px(PX,PY,PW,2,ASH);px(PX,PY+PH,PW,2,ASH);px(PX,PY,2,PH,ASH);px(PX+PW,PY,2,PH,ASH);
   const labels=[['moonlight','wailing'],['tomb depth','fog density'],['bell tolls','raven count'],
                 ['candle hours','ghosts seen'],['grave age','ivy growth'],['owl calls','dread']];
   const lab=labels[(co.round-1)%labels.length];
-  cx.fillStyle=BONE;cx.font='14px monospace';cx.textAlign='center';
+  cx.fillStyle=BONE;cx.font=f14;cx.textAlign='center';
   cx.fillText(lab[0],PX+PW/2,PY+PH+26);
   cx.save();cx.translate(PX-24,PY+PH/2);cx.rotate(-Math.PI/2);
   cx.fillText(lab[1],0,0);cx.restore();
   cx.textAlign='left';
-  cx.fillStyle=FOG;cx.font='13px monospace';
-  cx.fillText('round '+co.round,PX+PW+14,PY+16);
+  cx.fillStyle=FOG;cx.font=f13;
+  cx.fillText('round '+co.round,panelX,PY+Math.round(16*FS));
   for(const p of co.pts){
     const sx=PX+PW/2+p[0]*(PW/6),sy=PY+PH/2-p[1]*(PH/6);
     if(sx>PX+4&&sx<PX+PW-4&&sy>PY+4&&sy<PY+PH-4){
@@ -473,18 +495,18 @@ function tickCorr(){
       px(sx-2,sy-2,1,1,DARK);px(sx+1,sy-2,1,1,DARK);
     }
   }
-  cx.font='13px monospace';
+  cx.font=f13;
   if(co.reveal){
     cx.fillStyle=GLOW;
-    cx.fillText('true r',PX+PW+14,PY+52);
-    cx.font='18px monospace';
-    cx.fillText(co.r.toFixed(2),PX+PW+14,PY+74);
-    cx.font='13px monospace';cx.fillStyle=BONE;
-    cx.fillText('err '+co.err.toFixed(2),PX+PW+14,PY+100);
-    co.verdict.split(' ').forEach((w,i)=>cx.fillText(w,PX+PW+14,PY+128+i*17));
+    cx.fillText('true r',panelX,PY+Math.round(52*FS));
+    cx.font=f18;
+    cx.fillText(co.r.toFixed(2),panelX,PY+Math.round(74*FS));
+    cx.font=f13;cx.fillStyle=BONE;
+    cx.fillText('err '+co.err.toFixed(2),panelX,PY+Math.round(100*FS));
+    co.verdict.split(' ').forEach((w,i)=>cx.fillText(w,panelX,PY+Math.round(128*FS)+i*LH));
   }else{
     cx.fillStyle=ASH;
-    ['guess r','with the','slider,','then','lock'].forEach((w,i)=>cx.fillText(w,PX+PW+14,PY+52+i*17));
+    ['guess r','with the','slider,','then','lock'].forEach((w,i)=>cx.fillText(w,panelX,PY+Math.round(52*FS)+i*LH));
   }
 }
 
@@ -651,6 +673,15 @@ function matResolve(saidImpossible){
   if(saidImpossible)correct=!ma.compat;
   else{
     const r=parseInt($('ansRows').value,10),c=parseInt($('ansCols').value,10);
+    if(!(r>=1&&r<=9&&c>=1&&c<=9)){ // reject empty / out-of-range instead of scoring it
+      [['ansRows',r],['ansCols',c]].forEach(([id,v])=>{
+        if(!(v>=1&&v<=9)){
+          const el=$(id);el.classList.add('bad');
+          setTimeout(()=>el.classList.remove('bad'),500);
+        }
+      });
+      return;
+    }
     correct=ma.compat&&r===ma.ansShape[0]&&c===ma.ansShape[1];
   }
   ma.reveal=true;
@@ -666,15 +697,18 @@ function matResolve(saidImpossible){
   }
   setHP(ma.hp,5);setScore('Score',ma.score);
   if(ma.hp<=0){
-    setTimeout(()=>endScreen('Unshaped','The forge rejected your hand. Final score: '+ma.score,'Forge again',startMat),1600);
+    setTimeout(()=>{if(mode!=='mat')return;endScreen('Unshaped','The forge rejected your hand. Final score: '+ma.score,'Forge again',startMat);},1600);
   }else if(ma.score>=400){
-    setTimeout(()=>endScreen('Trial IV passed','Eight true forges. You see shapes the way the Shaper does.','Forge again',startMat),1600);
+    setTimeout(()=>{if(mode!=='mat')return;endScreen('Trial IV passed','Eight true forges. You see shapes the way the Shaper does.','Forge again',startMat);},1600);
   }else{
     setTimeout(()=>{if(mode!=='mat')return;ma.round++;newMatRound();},correct?1400:2600);
   }
 }
 $('forgeBtn').addEventListener('click',()=>matResolve(false));
 $('impBtn').addEventListener('click',()=>matResolve(true));
+['ansRows','ansCols'].forEach(id=>$(id).addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();matResolve(false);}
+}));
 
 function drawBlankMatrix(x0,y0,rows,cols,cell,frame){
   cx.strokeStyle=frame;cx.lineWidth=2;
@@ -684,61 +718,70 @@ function drawBlankMatrix(x0,y0,rows,cols,cell,frame){
   for(let i=1;i<rows;i++){cx.beginPath();cx.moveTo(x0,y0+i*cell);cx.lineTo(x0+cols*cell,y0+i*cell);cx.stroke();}
 }
 function tickMat(){
-  const CW=640,CH=360,cell=26,midY=185;
+  const CW=640,CH=360,midY=185;
+  const SM=smallMQ.matches,FS=SM?1.4:1,
+        f13=Math.round(13*FS)+'px monospace',
+        f15=Math.round(15*FS)+'px monospace',
+        f18=Math.round(18*FS)+'px monospace';
   cx.fillStyle=INK;cx.fillRect(0,0,CW,CH);
   // layout the chain centered: [M] sigma [M] sigma [M] = [?]
   const gapSig=44,gapEq=52;
-  let totalW=0;
-  ma.dims.forEach((d,i)=>{totalW+=d[1]*cell+(i?gapSig:0);});
   const qCols=ma.compat?ma.ansShape[1]:3,qRows=ma.compat?ma.ansShape[0]:3;
-  totalW+=gapEq+qCols*cell;
+  // shrink cells when a wide chain would clip the canvas edge
+  const chainW=c=>{let w=0;ma.dims.forEach((d,i)=>{w+=d[1]*c+(i?gapSig:0);});return w+gapEq+qCols*c;};
+  let cell=26;
+  while(cell>14&&chainW(cell)>CW-12)cell-=2;
+  const totalW=chainW(cell);
   let x=CW/2-totalW/2;
-  cx.font='15px monospace';cx.textAlign='center';cx.textBaseline='middle';
+  cx.font=f15;cx.textAlign='center';cx.textBaseline='middle';
   ma.dims.forEach((d,i)=>{
     if(i){ // sigma between layers: the nonlinearity that never bends a shape
       cx.fillStyle=GLOW2;
       cx.fillText('σ',x-gapSig/2,midY);
-      cx.fillStyle=ASH;cx.font='10px monospace';
-      cx.fillText('·',x-gapSig/2,midY+16);
-      cx.font='15px monospace';
+      cx.fillStyle=ASH;cx.font=Math.round(10*FS)+'px monospace';
+      cx.fillText('·',x-gapSig/2,midY+Math.round(16*FS));
+      cx.font=f15;
     }
     const h2=d[0]*cell,y0=midY-h2/2;
     drawBlankMatrix(x,y0,d[0],d[1],cell,FOG);
-    // pulse one row of the left matrix and one column of the next — the handshake
-    if(!reduceMotion&&i<ma.dims.length-1&&Math.floor(t/30)%2===0){
-      cx.fillStyle='rgba(74,163,224,0.15)';
-      cx.fillRect(x,y0,d[1]*cell,cell);
-    }
     x+=d[1]*cell+gapSig;
   });
   x-=gapSig;
   // equals + answer shape
-  cx.fillStyle=BONE;cx.font='18px monospace';
+  cx.fillStyle=BONE;cx.font=f18;
   cx.fillText('=',x+gapEq/2,midY);
   const qx=x+gapEq,qy=midY-(qRows*cell)/2;
   if(ma.reveal&&ma.compat){
     drawBlankMatrix(qx,qy,ma.ansShape[0],ma.ansShape[1],cell,GLOW);
-    cx.fillStyle=GLOW2;cx.font='15px monospace';
+    cx.fillStyle=GLOW2;cx.font=f15;
     cx.fillText(ma.ansShape[0]+'×'+ma.ansShape[1],qx+ma.ansShape[1]*cell/2,qy-16);
   }else if(ma.reveal&&!ma.compat){
-    cx.fillStyle=GLOW;cx.font='26px monospace';
+    cx.fillStyle=GLOW;cx.font=Math.round(26*FS)+'px monospace';
     cx.fillText('∅',qx+qCols*cell/2,midY);
   }else{
     cx.setLineDash([5,4]);
     cx.strokeStyle=GLOW;cx.lineWidth=2;
     cx.strokeRect(qx,qy,qCols*cell,qRows*cell);
     cx.setLineDash([]);
-    cx.fillStyle=GLOW;cx.font='24px monospace';
+    cx.fillStyle=GLOW;cx.font=Math.round(24*FS)+'px monospace';
     cx.fillText('?',qx+qCols*cell/2,midY);
   }
   cx.textAlign='left';cx.textBaseline='alphabetic';
   // header + hints (shapes only, no numbers on the grids)
-  cx.fillStyle=ASH;cx.font='13px monospace';
+  cx.fillStyle=ASH;cx.font=f13;
   cx.fillText('round '+ma.round,16,24);
   cx.fillStyle=FOG;
-  cx.fillText('count the cells. what shape does this chain forge?',16,CH-40);
-  cx.fillStyle=ASH;
-  cx.fillText('σ bends values, never shapes. if inner edges differ, the shapes refuse.',16,CH-20);
+  if(SM){
+    cx.fillText('count the cells.',16,CH-62);
+    cx.fillText('what shape does this chain forge?',16,CH-44);
+    cx.fillStyle=ASH;
+    cx.fillText('σ bends values, never shapes.',16,CH-26);
+    cx.fillText('if inner edges differ, the shapes refuse.',16,CH-8);
+  }else{
+    cx.fillText('count the cells. what shape does this chain forge?',16,CH-40);
+    cx.fillStyle=ASH;
+    cx.fillText('σ bends values, never shapes. if inner edges differ, the shapes refuse.',16,CH-20);
+  }
   if(ma.reveal){cx.fillStyle=BONE;cx.fillText(ma.verdict,16,44);}
 }
 
